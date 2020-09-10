@@ -16,12 +16,13 @@ func main() {
 		// expect /hello?name=lm
 		c.String(http.StatusOK, "hello %s, you're at %s\n", c.Query("name"), c.Path)
 	})
+	r.GET("/hello/:name", func(c *lm.Context) {
+		//expect /hello/lm
+		c.String(http.StatusOK, "hello %s, you're at %s\n", c.Param("name"), c.Path)
+	})
 
-	r.POST("/login", func(c *lm.Context) {
-		c.JSON(http.StatusOK, lm.S{
-			"username": c.PostForm("username"),
-			"password": c.PostForm("password"),
-		})
+	r.GET("/assets/*filepath", func(c *lm.Context) {
+		c.JSON(http.StatusOK, lm.S{"filepath": c.Param("filepath")})
 	})
 
 	r.Run(":9999")
