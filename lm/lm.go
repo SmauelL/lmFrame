@@ -3,24 +3,26 @@ package lm
 import (
 	"log"
 	"net/http"
+	"strings"
 )
 
 // HandlerFunc defines the request handler used bu lm
 type HandlerFunc func(*Context)
 
-type RouteGroup struct {
-	prefix      string
-	middlewares []HandlerFunc // support middleware
-	parent      *RouteGroup   // support nesting
-	engine      *Engine       // all groups share a Engine instance
-}
-
 // Engine implement the interface of ServeHTTP
-type Engine struct {
-	*RouteGroup
-	router *router
-	groups []*RouteGroup // store all groups
-}
+type (
+	RouteGroup struct {
+		prefix      string
+		middlewares []HandlerFunc // support middleware
+		parent      *RouteGroup   // support nesting
+		engine      *Engine       // all groups share a Engine instance
+	}
+	Engine struct {
+		*RouteGroup
+		router *router
+		groups []*RouteGroup // store all groups
+	}
+)
 
 // New is the constructor of lm.Engine
 func New() *Engine {
@@ -64,7 +66,19 @@ func (engine *Engine) Run(addr string) (err error) {
 	return http.ListenAndServe(addr, engine)
 }
 
+// Use is defined to add middleware to the group
+func (group *RouteGroup) Use(middlewares ...HandlerFunc) {
+	group.middlewares = append(group.middlewares, middlewares...)
+}
+
 func (engine *Engine) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	var middlewares []HandlerFunc
+	for _, group := range engine.groups {
+		if strings.HasPrefix(req.URL.Path, group.prefix) {
+			middlewares = append(middlewares, group.middlewares...)
+		}
+	}
 	c := newContext(w, req)
+	c.handlers = middlewares
 	engine.router.handle(c)
 }
