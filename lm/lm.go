@@ -1,8 +1,10 @@
 package lm
 
 import (
+	"html/template"
 	"log"
 	"net/http"
+	"path"
 	"strings"
 )
 
@@ -19,10 +21,20 @@ type (
 	}
 	Engine struct {
 		*RouteGroup
-		router *router
-		groups []*RouteGroup // store all groups
+		router        *router
+		groups        []*RouteGroup      // store all groups
+		htmlTemplates *template.Template // for html render
+		funcMap       template.FuncMap   // for html render
 	}
 )
+
+func (engine *Engine) SetFuncMap(funcMap template.FuncMap) {
+	engine.funcMap = funcMap
+}
+
+func (engine *Engine) LoadHTMLGlob(pattern string) {
+	engine.htmlTemplates = template.Must(template.New("").Funcs(engine.funcMap).ParseGlob(pattern))
+}
 
 // New is the constructor of lm.Engine
 func New() *Engine {
@@ -30,6 +42,29 @@ func New() *Engine {
 	engine.RouteGroup = &RouteGroup{engine: engine}
 	engine.groups = []*RouteGroup{engine.RouteGroup}
 	return engine
+}
+
+// create static handler
+func (group *RouteGroup) createStaticHandler(relativePath string, fs http.FileSystem) HandlerFunc {
+	absolutePath := path.Join(group.prefix, relativePath)
+	fileServer := http.StripPrefix(absolutePath, http.FileServer(fs))
+	return func(c *Context) {
+		file := c.Param("filepath")
+		// Check if file exists and/or if we have permission to access it
+		if _, err := fs.Open(file); err != nil {
+			c.Status(http.StatusNotFound)
+			return
+		}
+		fileServer.ServeHTTP(c.Writer, c.Req)
+	}
+}
+
+// serve static files
+func (group *RouteGroup) Static(relativePath string, root string) {
+	handler := group.createStaticHandler(relativePath, http.Dir(root))
+	urlPattern := path.Join(relativePath, "/*filepath")
+	// Register GET handlers
+	group.GET(urlPattern, handler)
 }
 
 // Group is defined to create a new RouterGroup
@@ -80,5 +115,6 @@ func (engine *Engine) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 	c := newContext(w, req)
 	c.handlers = middlewares
+	c.engine = engine
 	engine.router.handle(c)
 }
