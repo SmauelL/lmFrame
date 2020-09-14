@@ -86,6 +86,13 @@ func (group *RouteGroup) addRoute(method string, comp string, handler HandlerFun
 	group.engine.router.addRoute(method, pattern, handler)
 }
 
+// Default use Logger() & Recovery middlewares
+func Default() *Engine {
+	engine := New()
+	engine.Use(Logger(), Recovery())
+	return engine
+}
+
 // GET defines the method to add GET request
 func (group *RouteGroup) GET(pattern string, handler HandlerFunc) {
 	group.addRoute("GET", pattern, handler)
